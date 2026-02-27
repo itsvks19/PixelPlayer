@@ -33,8 +33,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.QueueMusic
 import androidx.compose.material.icons.automirrored.rounded.VolumeUp
-import androidx.compose.material.icons.rounded.Favorite
-import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.LibraryMusic
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
@@ -137,7 +135,6 @@ fun PlayerScreen(
         onTogglePlayPause = viewModel::togglePlayPause,
         onNext = viewModel::next,
         onPrevious = viewModel::previous,
-        onToggleFavorite = viewModel::toggleFavorite,
         activeOutputRouteType = activeOutputRouteType,
         onBrowseClick = onBrowseClick,
         onVolumeClick = onVolumeClick,
@@ -156,7 +153,6 @@ private fun PlayerContent(
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
-    onToggleFavorite: () -> Unit,
     activeOutputRouteType: String,
     onBrowseClick: () -> Unit,
     onVolumeClick: () -> Unit,
@@ -201,8 +197,8 @@ private fun PlayerContent(
                         onTogglePlayPause = onTogglePlayPause,
                         onNext = onNext,
                         onPrevious = onPrevious,
-                        onToggleFavorite = onToggleFavorite,
                         activeOutputRouteType = activeOutputRouteType,
+                        onVolumeClick = onVolumeClick,
                         onOutputClick = onOutputClick,
                         onMoreClick = onMoreClick,
                         onQueueClick = onQueueClick,
@@ -762,8 +758,8 @@ private fun MainPlayerPage(
     onTogglePlayPause: () -> Unit,
     onNext: () -> Unit,
     onPrevious: () -> Unit,
-    onToggleFavorite: () -> Unit,
     activeOutputRouteType: String,
+    onVolumeClick: () -> Unit,
     onOutputClick: () -> Unit,
     onMoreClick: () -> Unit,
     onQueueClick: () -> Unit,
@@ -855,8 +851,7 @@ private fun MainPlayerPage(
 
             item {
                 SecondaryControlsRow(
-                    isFavorite = state.isFavorite,
-                    favoriteEnabled = isPhoneConnected && !state.isEmpty && !isWatchOutputSelected,
+                    volumeEnabled = isPhoneConnected || isWatchOutputSelected,
                     deviceEnabled = isPhoneConnected || isWatchOutputSelected,
                     deviceRouteType = if (isWatchOutputSelected) {
                         com.theveloper.pixelplay.shared.WearVolumeState.ROUTE_TYPE_WATCH
@@ -864,10 +859,9 @@ private fun MainPlayerPage(
                         activeOutputRouteType
                     },
                     moreEnabled = true,
-                    onToggleFavorite = onToggleFavorite,
+                    onVolumeClick = onVolumeClick,
                     onOutputClick = onOutputClick,
                     onMoreClick = onMoreClick,
-                    favoriteActiveColor = palette.favoriteActive,
                     deviceActiveColor = palette.shuffleActive,
                 )
             }
@@ -1165,15 +1159,13 @@ private fun CenterPlayButton(
 
 @Composable
 private fun SecondaryControlsRow(
-    isFavorite: Boolean,
-    favoriteEnabled: Boolean,
+    volumeEnabled: Boolean,
     deviceEnabled: Boolean,
     deviceRouteType: String,
     moreEnabled: Boolean,
-    onToggleFavorite: () -> Unit,
+    onVolumeClick: () -> Unit,
     onOutputClick: () -> Unit,
     onMoreClick: () -> Unit,
-    favoriteActiveColor: Color,
     deviceActiveColor: Color,
 ) {
     Row(
@@ -1188,12 +1180,12 @@ private fun SecondaryControlsRow(
     ) {
         SecondaryActionSlot(lower = false) {
             SecondaryActionButton(
-                icon = if (isFavorite) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                enabled = favoriteEnabled,
-                active = isFavorite,
-                activeColor = favoriteActiveColor,
-                onClick = onToggleFavorite,
-                contentDescription = "Like",
+                icon = Icons.AutoMirrored.Rounded.VolumeUp,
+                enabled = volumeEnabled,
+                active = false,
+                activeColor = deviceActiveColor,
+                onClick = onVolumeClick,
+                contentDescription = "Volume",
             )
         }
         SecondaryActionSlot(lower = true) {

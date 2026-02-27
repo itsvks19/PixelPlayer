@@ -11,10 +11,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,9 +28,10 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -50,6 +49,8 @@ import com.theveloper.pixelplay.presentation.theme.surfaceContainerColor
 import com.theveloper.pixelplay.presentation.theme.surfaceContainerHighColor
 import com.theveloper.pixelplay.presentation.viewmodel.WearPlayerViewModel
 import kotlinx.coroutines.delay
+import kotlin.math.cos
+import kotlin.math.sin
 
 @Composable
 fun VolumeScreen(
@@ -86,10 +87,7 @@ fun VolumeScreen(
         CurvedVolumeIndicator(
             progress = progress,
             modifier = Modifier
-                .align(Alignment.CenterStart)
-                .fillMaxHeight(0.72f)
-                .size(186.dp)
-                .offset(x = (-62).dp),
+                .fillMaxSize(),
         )
 
         Column(
@@ -142,16 +140,19 @@ private fun CurvedVolumeIndicator(
     val progressColor = palette.controlContainer
 
     Canvas(modifier = modifier) {
-        val strokeWidth = 7.dp.toPx()
-        val inset = strokeWidth / 2f + 2.dp.toPx()
+        val strokeWidth = 6.dp.toPx()
+        val inset = strokeWidth / 2f + 9.dp.toPx()
         val diameter = size.minDimension - (inset * 2f)
-        val arcSize = androidx.compose.ui.geometry.Size(diameter, diameter)
-        val topLeft = androidx.compose.ui.geometry.Offset(
+        val arcSize = Size(diameter, diameter)
+        val topLeft = Offset(
             x = (size.width - diameter) / 2f,
             y = (size.height - diameter) / 2f,
         )
-        val startAngle = 226f
-        val sweepAngle = -108f
+        val startAngle = 228f
+        val sweepAngle = -96f
+        val centerX = topLeft.x + (diameter / 2f)
+        val centerY = topLeft.y + (diameter / 2f)
+        val radius = diameter / 2f
 
         drawArc(
             color = trackColor,
@@ -171,6 +172,19 @@ private fun CurvedVolumeIndicator(
             size = arcSize,
             style = Stroke(width = strokeWidth, cap = StrokeCap.Round),
         )
+
+//        if (animatedProgress > 0.01f) {
+//            val knobAngleRad = Math.toRadians((startAngle + (sweepAngle * animatedProgress)).toDouble())
+//            val knobCenter = Offset(
+//                x = centerX + (radius * cos(knobAngleRad).toFloat()),
+//                y = centerY + (radius * sin(knobAngleRad).toFloat()),
+//            )
+//            drawCircle(
+//                color = progressColor,
+//                radius = strokeWidth * 0.86f,
+//                center = knobCenter,
+//            )
+//        }
     }
 }
 
@@ -182,7 +196,7 @@ private fun VolumeValuePill(
     modifier: Modifier = Modifier,
 ) {
     val palette = LocalWearPalette.current
-    val container = palette.surfaceContainerHighColor()
+    val container = palette.chipContent
     val icon = if (level <= 0) {
         Icons.AutoMirrored.Rounded.VolumeOff
     } else {
