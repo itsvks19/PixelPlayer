@@ -25,6 +25,8 @@ data class WearThemePalette(
     val controlContentArgb: Int,
     val controlDisabledContainerArgb: Int,
     val controlDisabledContentArgb: Int,
+    val transportContainerArgb: Int = 0,
+    val transportContentArgb: Int = 0,
     val chipContainerArgb: Int,
     val chipContentArgb: Int,
     val favoriteActiveArgb: Int,

@@ -35,6 +35,8 @@ data class WearPalette(
     val controlContent: Color,
     val controlDisabledContainer: Color,
     val controlDisabledContent: Color,
+    val transportContainer: Color,
+    val transportContent: Color,
     val chipContainer: Color,
     val chipContent: Color,
     val favoriteActive: Color,
@@ -54,10 +56,12 @@ private val DefaultWearPalette = WearPalette(
     textPrimary = Color(0xFFF4EEFF),
     textSecondary = Color(0xFFE1D5FF),
     textError = Color(0xFFFFB7C5),
-    controlContainer = Color(0xFFE6DBFF).copy(alpha = 0.95f),
-    controlContent = Color(0xFF2C0C62),
+    controlContainer = Color(0xFFF0E7FF).copy(alpha = 0.96f),
+    controlContent = Color(0xFF24114A),
     controlDisabledContainer = Color(0xFF3D2E5B),
     controlDisabledContent = bestContrastContent(Color(0xFF3D2E5B)),
+    transportContainer = Color(0xFFE6DBFF).copy(alpha = 0.95f),
+    transportContent = Color(0xFF2C0C62),
     chipContainer = Color(0xFF2A2140),
     chipContent = Color(0xFFE8E0FF),
     favoriteActive = Color(0xFFF1608E),
@@ -70,8 +74,9 @@ val LocalWearPalette = staticCompositionLocalOf { DefaultWearPalette }
 fun WearPalette.radialBackgroundBrush(): Brush = Brush.radialGradient(
     colorStops = arrayOf(
         0.0f to gradientTop,
-        0.56f to gradientMiddle,
-        0.82f to gradientBottom,
+        0.40f to gradientMiddle,
+        0.74f to gradientBottom,
+        0.92f to Color.Black,
         1.0f to Color.Black,
     ),
 )
@@ -126,6 +131,7 @@ private fun WearThemePalette.toWearPalette(): WearPalette {
     val surfaceHigh = colorOrDefault(surfaceContainerHighArgb, lerp(surface, Color.White, 0.08f))
     val surfaceHighest = colorOrDefault(surfaceContainerHighestArgb, lerp(surface, Color.White, 0.14f))
     val disabledContainer = colorOrDefault(controlDisabledContainerArgb, surfaceHighest)
+    val transportContainer = colorOrDefault(transportContainerArgb, Color(controlContainerArgb))
 
     return WearPalette(
         gradientTop = Color(gradientTopArgb),
@@ -143,6 +149,11 @@ private fun WearThemePalette.toWearPalette(): WearPalette {
         controlContent = Color(controlContentArgb),
         controlDisabledContainer = disabledContainer,
         controlDisabledContent = colorOrDefault(controlDisabledContentArgb, bestContrastContent(disabledContainer)),
+        transportContainer = transportContainer,
+        transportContent = colorOrDefault(
+            transportContentArgb,
+            colorOrDefault(controlContentArgb, bestContrastContent(transportContainer)),
+        ),
         chipContainer = colorOrDefault(chipContainerArgb, surface),
         chipContent = Color(chipContentArgb),
         favoriteActive = Color(favoriteActiveArgb),
@@ -174,8 +185,10 @@ private fun buildPaletteFromSeedColor(seed: Color): WearPalette {
     val surfaceContainerHigh = lerp(surfaceBackground, Color.White, 0.14f).copy(alpha = 0.97f)
     val surfaceContainerHighest = lerp(surfaceBackground, Color.White, 0.20f).copy(alpha = 0.98f)
     val chipContainer = surfaceContainer
-    val controlContainer = lerp(surfaceBackground, Color.White, 0.18f).copy(alpha = 0.98f)
+    val controlContainer = lerp(surfaceBackground, Color.White, 0.26f).copy(alpha = 0.98f)
     val controlContent = bestContrastContent(controlContainer)
+    val transportContainer = lerp(surfaceBackground, Color.White, 0.20f).copy(alpha = 0.98f)
+    val transportContent = bestContrastContent(transportContainer)
     val controlDisabledContainer = surfaceContainerHighest
     val controlDisabledContent = bestContrastContent(controlDisabledContainer)
 
@@ -195,6 +208,8 @@ private fun buildPaletteFromSeedColor(seed: Color): WearPalette {
         controlContent = controlContent,
         controlDisabledContainer = controlDisabledContainer,
         controlDisabledContent = controlDisabledContent,
+        transportContainer = transportContainer,
+        transportContent = transportContent,
         chipContainer = chipContainer,
         chipContent = Color(0xFFF2EBFF),
         favoriteActive = buildAccentFromSeed(seedArgb, hueShift = 34f),

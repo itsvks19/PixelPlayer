@@ -1030,8 +1030,8 @@ private fun FlattenedControlButton(
     height: Dp,
 ) {
     val palette = LocalWearPalette.current
-    val container = if (enabled) palette.controlContainer else palette.controlDisabledContainer
-    val tint = if (enabled) palette.controlContent else palette.controlDisabledContent
+    val container = if (enabled) palette.transportContainer else palette.controlDisabledContainer
+    val tint = if (enabled) palette.transportContent else palette.controlDisabledContent
 
     Box(
         modifier = Modifier

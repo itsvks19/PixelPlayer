@@ -304,6 +304,8 @@ class WearStatePublisher @Inject constructor(
      * This avoids re-extracting colors from album art on watch and keeps both UIs aligned.
      */
     private fun buildWearThemePalette(playerInfo: PlayerInfo): WearThemePalette? {
+        playerInfo.wearThemePalette?.let { return it }
+
         val colors = playerInfo.themeColors ?: return null
 
         val surfaceContainer = colors.darkSurfaceContainer
@@ -347,6 +349,11 @@ class WearStatePublisher @Inject constructor(
             controlDisabledContentArgb = ensureReadable(
                 preferredColor = artist,
                 backgroundColor = disabledContainer
+            ),
+            transportContainerArgb = secondaryContainer,
+            transportContentArgb = ensureReadable(
+                preferredColor = secondaryContent,
+                backgroundColor = secondaryContainer,
             ),
             chipContainerArgb = chipContainer,
             chipContentArgb = ensureReadable(preferredColor = secondaryContent, backgroundColor = chipContainer),
