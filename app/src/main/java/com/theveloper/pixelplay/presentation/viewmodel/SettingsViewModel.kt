@@ -79,6 +79,8 @@ data class SettingsUiState(
     val immersiveLyricsEnabled: Boolean = false,
     val immersiveLyricsTimeout: Long = 4000L,
     val useAnimatedLyrics: Boolean = false,
+    val animatedLyricsBlurEnabled: Boolean = true,
+    val animatedLyricsBlurStrength: Float = 2.5f,
     val backupInfoDismissed: Boolean = false,
     val isDataTransferInProgress: Boolean = false,
     val restorePlan: RestorePlan? = null,
@@ -141,7 +143,9 @@ private sealed interface SettingsUiUpdate {
         val blockedDirectories: Set<String>,
         val hapticsEnabled: Boolean,
         val immersiveLyricsEnabled: Boolean,
-        val immersiveLyricsTimeout: Long
+        val immersiveLyricsTimeout: Long,
+        val animatedLyricsBlurEnabled: Boolean,
+        val animatedLyricsBlurStrength: Float
     ) : SettingsUiUpdate
 }
 
@@ -302,7 +306,9 @@ class SettingsViewModel @Inject constructor(
                 userPreferencesRepository.blockedDirectoriesFlow,
                 userPreferencesRepository.hapticsEnabledFlow,
                 userPreferencesRepository.immersiveLyricsEnabledFlow,
-                userPreferencesRepository.immersiveLyricsTimeoutFlow
+                userPreferencesRepository.immersiveLyricsTimeoutFlow,
+                userPreferencesRepository.animatedLyricsBlurEnabledFlow,
+                userPreferencesRepository.animatedLyricsBlurStrengthFlow
             ) { values ->
                 SettingsUiUpdate.Group2(
                     keepPlayingInBackground = values[0] as Boolean,
@@ -317,7 +323,9 @@ class SettingsViewModel @Inject constructor(
                     blockedDirectories = @Suppress("UNCHECKED_CAST") (values[9] as Set<String>),
                     hapticsEnabled = values[10] as Boolean,
                     immersiveLyricsEnabled = values[11] as Boolean,
-                    immersiveLyricsTimeout = values[12] as Long
+                    immersiveLyricsTimeout = values[12] as Long,
+                    animatedLyricsBlurEnabled = values[13] as Boolean,
+                    animatedLyricsBlurStrength = values[14] as Float
                 )
             }.collect { update ->
                 _uiState.update { state ->
@@ -334,7 +342,9 @@ class SettingsViewModel @Inject constructor(
                         blockedDirectories = update.blockedDirectories,
                         hapticsEnabled = update.hapticsEnabled,
                         immersiveLyricsEnabled = update.immersiveLyricsEnabled,
-                        immersiveLyricsTimeout = update.immersiveLyricsTimeout
+                        immersiveLyricsTimeout = update.immersiveLyricsTimeout,
+                        animatedLyricsBlurEnabled = update.animatedLyricsBlurEnabled,
+                        animatedLyricsBlurStrength = update.animatedLyricsBlurStrength
                     )
                 }
             }
@@ -646,6 +656,18 @@ class SettingsViewModel @Inject constructor(
     fun setUseAnimatedLyrics(enabled: Boolean) {
         viewModelScope.launch {
             userPreferencesRepository.setUseAnimatedLyrics(enabled)
+        }
+    }
+
+    fun setAnimatedLyricsBlurEnabled(enabled: Boolean) {
+        viewModelScope.launch {
+            userPreferencesRepository.setAnimatedLyricsBlurEnabled(enabled)
+        }
+    }
+
+    fun setAnimatedLyricsBlurStrength(strength: Float) {
+        viewModelScope.launch {
+            userPreferencesRepository.setAnimatedLyricsBlurStrength(strength)
         }
     }
 

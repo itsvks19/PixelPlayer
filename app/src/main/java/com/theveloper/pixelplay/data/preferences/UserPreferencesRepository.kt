@@ -187,6 +187,8 @@ constructor(
         val IMMERSIVE_LYRICS_ENABLED = booleanPreferencesKey("immersive_lyrics_enabled")
         val IMMERSIVE_LYRICS_TIMEOUT = longPreferencesKey("immersive_lyrics_timeout")
         val USE_ANIMATED_LYRICS = booleanPreferencesKey("use_animated_lyrics")
+        val ANIMATED_LYRICS_BLUR_ENABLED = booleanPreferencesKey("animated_lyrics_blur_enabled")
+        val ANIMATED_LYRICS_BLUR_STRENGTH = androidx.datastore.preferences.core.floatPreferencesKey("animated_lyrics_blur_strength")
         
         // Genre View Preference
         val IS_GENRE_GRID_VIEW = booleanPreferencesKey("is_genre_grid_view")
@@ -1235,6 +1237,29 @@ constructor(
     suspend fun setUseAnimatedLyrics(enabled: Boolean) {
         dataStore.edit { preferences ->
             preferences[PreferencesKeys.USE_ANIMATED_LYRICS] = enabled
+        }
+    }
+
+    val animatedLyricsBlurEnabledFlow: Flow<Boolean> = dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.ANIMATED_LYRICS_BLUR_ENABLED] ?: true
+        }
+
+    suspend fun setAnimatedLyricsBlurEnabled(enabled: Boolean) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ANIMATED_LYRICS_BLUR_ENABLED] = enabled
+        }
+    }
+
+    // Range should ideally be 0.0f to 5.0f (or similar)
+    val animatedLyricsBlurStrengthFlow: Flow<Float> = dataStore.data
+        .map { preferences ->
+            preferences[PreferencesKeys.ANIMATED_LYRICS_BLUR_STRENGTH] ?: 2.5f
+        }
+
+    suspend fun setAnimatedLyricsBlurStrength(strength: Float) {
+        dataStore.edit { preferences ->
+            preferences[PreferencesKeys.ANIMATED_LYRICS_BLUR_STRENGTH] = strength
         }
     }
 

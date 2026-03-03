@@ -59,6 +59,7 @@ import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -193,6 +194,16 @@ fun LyricsSheet(
         context.dataStore.data.map { it[booleanPreferencesKey("use_animated_lyrics")] ?: false }
     }
     val useAnimatedLyrics by useAnimatedLyricsFlow.collectAsStateWithLifecycle(initialValue = false)
+
+    val animatedLyricsBlurEnabledFlow = remember(context) {
+        context.dataStore.data.map { it[booleanPreferencesKey("animated_lyrics_blur_enabled")] ?: true }
+    }
+    val animatedLyricsBlurEnabled by animatedLyricsBlurEnabledFlow.collectAsStateWithLifecycle(initialValue = true)
+
+    val animatedLyricsBlurStrengthFlow = remember(context) {
+        context.dataStore.data.map { it[androidx.datastore.preferences.core.floatPreferencesKey("animated_lyrics_blur_strength")] ?: 2.5f }
+    }
+    val animatedLyricsBlurStrength by animatedLyricsBlurStrengthFlow.collectAsStateWithLifecycle(initialValue = 2.5f)
 
     val resolvedAutoscrollSpec = autoscrollAnimationSpec ?: if (useAnimatedLyrics) {
         spring(
@@ -541,6 +552,8 @@ fun LyricsSheet(
                                 highlightOffsetDp = highlightOffsetDp,
                                 autoscrollAnimationSpec = resolvedAutoscrollSpec,
                                 useAnimatedLyrics = useAnimatedLyrics,
+                                animatedLyricsBlurEnabled = animatedLyricsBlurEnabled,
+                                animatedLyricsBlurStrength = animatedLyricsBlurStrength,
                                 immersiveMode = immersiveMode,
                                 footer = {
                                     if (lyrics?.areFromRemote == true) {
@@ -873,6 +886,8 @@ fun SyncedLyricsList(
     highlightOffsetDp: Dp,
     autoscrollAnimationSpec: AnimationSpec<Float>,
     useAnimatedLyrics: Boolean = false,
+    animatedLyricsBlurEnabled: Boolean = true,
+    animatedLyricsBlurStrength: Float = 2.5f,
     immersiveMode: Boolean = false,
     modifier: Modifier = Modifier,
     contentPadding: PaddingValues = PaddingValues(0.dp),
@@ -913,11 +928,25 @@ fun SyncedLyricsList(
             if (listState.isScrollInProgress) return@LaunchedEffect
             if (listState.layoutInfo.totalItemsCount == 0) return@LaunchedEffect
 
+            // Music Style Dynamic Velocity
+            val dynamicAnimationSpec = if (useAnimatedLyrics) {
+                val currentLineTime = lines.getOrNull(currentLineIndex)?.time ?: 0
+                val nextLineTime = lines.getOrNull(currentLineIndex + 1)?.time ?: (currentLineTime + 1000)
+                val timeDiff = (nextLineTime - currentLineTime).coerceIn(250, 2000) // Bound the duration
+                
+                tween<Float>(
+                    durationMillis = timeDiff,
+                    easing = FastOutSlowInEasing
+                )
+            } else {
+                autoscrollAnimationSpec
+            }
+
             animateToSnapIndex(
                 listState = listState,
                 layoutInfo = snapperLayoutInfo,
                 targetIndex = currentLineIndex,
-                animationSpec = autoscrollAnimationSpec
+                animationSpec = dynamicAnimationSpec
             )
         }
 
@@ -934,6 +963,23 @@ fun SyncedLyricsList(
                 ) { index, line ->
                     val nextTime = lines.getOrNull(index + 1)?.time ?: Int.MAX_VALUE
                     val distanceFromCurrent = if (currentLineIndex != -1) abs(currentLineIndex - index) else 100
+                    
+                    val parallaxModifier = if (useAnimatedLyrics) {
+                        Modifier.graphicsLayer {
+                            // Calculate translation dynamically inside graphicsLayer to avoid recomposing the row during scroll
+                            val currentLayoutInfo = listState.layoutInfo
+                            val lineItemInfo = currentLayoutInfo.visibleItemsInfo.find { it.index == index }
+                            val itemCenter = lineItemInfo?.let { it.offset + (it.size / 2f) }
+                            val viewportCenter = currentLayoutInfo.viewportEndOffset / 2f
+                            
+                            val distanceFromCenter = itemCenter?.let { it - viewportCenter } ?: 0f
+                            
+                            val maxTranslation = 40f 
+                            val distanceRatio = (distanceFromCenter / viewportCenter).coerceIn(-1f, 1f)
+                            translationY = distanceRatio * distanceRatio * distanceRatio * maxTranslation 
+                        }
+                    } else Modifier
+
                     if (line.line.isNotBlank()) {
                         LyricLineRow(
                             line = line,
@@ -941,10 +987,12 @@ fun SyncedLyricsList(
                             position = position,
                             distanceFromCurrent = distanceFromCurrent,
                             useAnimatedLyrics = useAnimatedLyrics,
+                            animatedLyricsBlurEnabled = animatedLyricsBlurEnabled,
+                            animatedLyricsBlurStrength = animatedLyricsBlurStrength,
                             immersiveMode = immersiveMode,
                             accentColor = accentColor,
                             style = textStyle,
-                            modifier = Modifier
+                            modifier = parallaxModifier
                                 .fillMaxWidth()
                                 .testTag("synced_line_${line.time}"),
                             onClick = { onLineClick(line) }
@@ -955,7 +1003,7 @@ fun SyncedLyricsList(
                             time = line.time,
                             color = LocalContentColor.current.copy(alpha = 0.6f),
                             nextTime = nextTime,
-                            modifier = Modifier
+                            modifier = parallaxModifier
                                 .fillMaxWidth()
                                 .padding(vertical = 8.dp)
                         )
@@ -989,6 +1037,8 @@ fun LyricLineRow(
     position: Long,
     distanceFromCurrent: Int = 100,
     useAnimatedLyrics: Boolean = false,
+    animatedLyricsBlurEnabled: Boolean = true,
+    animatedLyricsBlurStrength: Float = 2.5f,
     immersiveMode: Boolean = false,
     accentColor: Color,
     style: TextStyle,
@@ -1050,16 +1100,34 @@ fun LyricLineRow(
         ) else tween(durationMillis = 200),
         label = "lineAlpha"
     )
+    
+    // Blur Effect
+    val targetBlur = if (useAnimatedLyrics && animatedLyricsBlurEnabled && distanceFromCurrent > 0) {
+        (distanceFromCurrent * animatedLyricsBlurStrength).coerceAtMost(10f).dp
+    } else 0.dp
+    
+    val blurRadius by animateDpAsState(
+        targetValue = targetBlur,
+        animationSpec = if (useAnimatedLyrics) tween(durationMillis = 400) else tween(durationMillis = 200),
+        label = "lineBlur"
+    )
 
     // Animated mode: apply graphicsLayer for scale/alpha transforms
+    val baseModifier = if (useAnimatedLyrics && !immersiveMode) {
+        modifier.padding(end = 36.dp)
+    } else {
+        modifier
+    }
     val animatedModifier = if (useAnimatedLyrics) {
-        modifier.graphicsLayer {
-            scaleX = scale
-            scaleY = scale
-            this.alpha = alpha
-            transformOrigin = TransformOrigin(0f, 0.5f)
-        }
-    } else modifier
+        baseModifier
+            .graphicsLayer {
+                scaleX = scale
+                scaleY = scale
+                this.alpha = alpha
+                transformOrigin = TransformOrigin(0f, 0.5f)
+            }
+            .then(if (blurRadius > 0.dp) Modifier.blur(blurRadius) else Modifier)
+    } else baseModifier
 
     if (sanitizedWords.isNullOrEmpty()) {
         Text(
