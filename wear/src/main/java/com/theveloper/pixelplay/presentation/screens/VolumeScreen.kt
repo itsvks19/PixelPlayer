@@ -179,17 +179,10 @@ private fun VolumeValuePill(
         )
         Spacer(modifier = Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.Start) {
-//            Text(
-//                text = "$percent%",
-//                color = palette.controlContent,
-//                style = MaterialTheme.typography.title3,
-//                fontWeight = FontWeight.SemiBold,
-//            )
             Text(
                 text = deviceName,
                 color = palette.controlContent,
                 style = MaterialTheme.typography.title3,
-                //fontSize = 11.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
