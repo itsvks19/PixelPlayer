@@ -66,6 +66,7 @@ class PhoneDirectWatchTransferCoordinator @Inject constructor(
             requestId = requestId,
             songId = songId,
         )
+        WatchTransferForegroundService.start(application)
         scope.launch {
             performTransfer(
                 nodeId = nodeId,
