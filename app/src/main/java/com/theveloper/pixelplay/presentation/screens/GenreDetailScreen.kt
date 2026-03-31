@@ -491,6 +491,13 @@ fun GenreDetailScreen(
                             }
                             showSongOptionsSheet = null
                         },
+                        onNavigateToGenre = {
+                            song.genre?.let {
+                                val route = com.theveloper.pixelplay.presentation.navigation.Screen.GenreDetail.createRoute(java.net.URLEncoder.encode(it, "UTF-8"))
+                                navController.navigateSafely(route)
+                            }
+                            showSongOptionsSheet = null
+                        },
                         onEditSong = { newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, newDiscNumber, coverArtUpdate ->
                             playerViewModel.editSongMetadata(song, newTitle, newArtist, newAlbum, newGenre, newLyrics, newTrackNumber, newDiscNumber, coverArtUpdate)
                         },

@@ -692,7 +692,8 @@ fun UnifiedPlayerSheet(
                     onEndQueueDrag = sheetActionHandlers.endQueueDrag,
                     onLaunchSaveQueueOverlay = sheetActionHandlers.onLaunchSaveQueueOverlay,
                     onNavigateToAlbum = sheetActionHandlers.onNavigateToAlbum,
-                    onNavigateToArtist = sheetActionHandlers.onNavigateToArtist
+                    onNavigateToArtist = sheetActionHandlers.onNavigateToArtist,
+                    onNavigateToGenre = sheetActionHandlers.onNavigateToGenre
                 )
 
             }

@@ -98,6 +98,7 @@ fun SongInfoBottomSheet(
     onDeleteFromDevice: (activity: Activity, song: Song, onResult: (Boolean) -> Unit) -> Unit,
     onNavigateToAlbum: () -> Unit,
     onNavigateToArtist: () -> Unit,
+    onNavigateToGenre: () -> Unit,
     onEditSong: (title: String, artist: String, album: String, genre: String, lyrics: String, trackNumber: Int, discNumber: Int?, coverArtUpdate: CoverArtUpdate?) -> Unit,
     generateAiMetadata: suspend (List<String>) -> Result<SongMetadata>,
     removeFromListTrigger: () -> Unit,
@@ -650,7 +651,7 @@ fun SongInfoBottomSheet(
                                                         icon = Icons.Rounded.MusicNote,
                                                         iconDescription = "Genre icon",
                                                         shape = infoSegmentItemShape,
-                                                        onClick = onNavigateToArtist,
+                                                        onClick = onNavigateToGenre,
                                                     )
                                                 }
 
