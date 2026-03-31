@@ -72,6 +72,7 @@ import com.theveloper.pixelplay.data.service.http.MediaFileHttpServerService
 import com.theveloper.pixelplay.data.service.player.DualPlayerEngine
 import com.theveloper.pixelplay.data.worker.SyncManager
 import com.theveloper.pixelplay.utils.AppShortcutManager
+import com.theveloper.pixelplay.utils.ValidatedLyricsImport
 import com.theveloper.pixelplay.utils.QueueUtils
 import com.theveloper.pixelplay.utils.MediaItemBuilder
 import com.theveloper.pixelplay.utils.LyricsUtils
@@ -4055,16 +4056,9 @@ class PlayerViewModel @Inject constructor(
      * @param songId El ID de la canción para la que se importa la letra.
      * @param lyricsContent El contenido de la letra como String.
      */
-    fun importLyricsFromFile(songId: Long, lyricsContent: String) {
+    fun importLyricsFromFile(songId: Long, validatedImport: ValidatedLyricsImport) {
         val currentSong = stablePlayerState.value.currentSong
-        lyricsStateHolder.importLyricsFromFile(songId, lyricsContent, currentSong)
-
-        // Optimistic local update since holder event handles persistence
-        if (currentSong?.id?.toLong() == songId) {
-            val parsed = com.theveloper.pixelplay.utils.LyricsUtils.parseLyrics(lyricsContent)
-            val updatedSong = currentSong.copy(lyrics = lyricsContent)
-            updateSongInStates(updatedSong, parsed)
-        }
+        lyricsStateHolder.importLyricsFromFile(songId, validatedImport, currentSong)
     }
 
     /**

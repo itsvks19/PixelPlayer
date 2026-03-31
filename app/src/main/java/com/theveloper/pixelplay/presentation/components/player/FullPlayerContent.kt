@@ -236,39 +236,50 @@ fun FullPlayerContent(
                 try {
                     val contentResolver = context.contentResolver
                     
-                    // Check file size and name for safety
+                    // Resolve file metadata up front, but do not trust provider size alone.
                     var fileName = ""
-                    var fileSize = 0L
+                    var fileSize: Long? = null
                     contentResolver.query(it, null, null, null, null)?.use { cursor ->
                         val nameIndex = cursor.getColumnIndex(android.provider.OpenableColumns.DISPLAY_NAME)
                         val sizeIndex = cursor.getColumnIndex(android.provider.OpenableColumns.SIZE)
                         if (cursor.moveToFirst()) {
                             fileName = if (nameIndex != -1) cursor.getString(nameIndex) else ""
-                            fileSize = if (sizeIndex != -1) cursor.getLong(sizeIndex) else 0L
+                            fileSize = if (sizeIndex != -1 && !cursor.isNull(sizeIndex)) {
+                                cursor.getLong(sizeIndex)
+                            } else {
+                                null
+                            }
                         }
                     }
 
-                    // Only allow max 1 MB file size (lyrics should be very small)
-                    if (fileSize > 1_000_000) {
-                        playerViewModel.sendToast("File too large. Please select a valid lyrics file.")
-                        return@let
-                    }
+                    val validation = contentResolver.openInputStream(it)?.use { inputStream ->
+                        com.theveloper.pixelplay.utils.LyricsImportSecurity.validateImportedLyricsFile(
+                            fileName = fileName,
+                            mimeType = contentResolver.getType(it),
+                            inputStream = inputStream,
+                            reportedSizeBytes = fileSize
+                        )
+                    } ?: com.theveloper.pixelplay.utils.LyricsImportValidationResult.Invalid(
+                        com.theveloper.pixelplay.utils.LyricsImportFailureReason.EMPTY_CONTENT
+                    )
 
-                    // Only allow .lrc or .txt file
-                    val isLyricsFile = fileName.endsWith(".lrc", ignoreCase = true) ||
-                            fileName.endsWith(".txt", ignoreCase = true)
-                    
-                    if (!isLyricsFile) {
-                        playerViewModel.sendToast("Only support .lrc or .txt file.")
-                        return@let
-                    }
-
-                    contentResolver.openInputStream(it)?.use { inputStream ->
-                        val lyricsContent = inputStream.bufferedReader().use { reader -> reader.readText() }
-                        currentSong?.id?.toLong()?.let { songId ->
-                            playerViewModel.importLyricsFromFile(songId, lyricsContent)
+                    val validatedImport = when (validation) {
+                        is com.theveloper.pixelplay.utils.LyricsImportValidationResult.Valid -> validation.value
+                        is com.theveloper.pixelplay.utils.LyricsImportValidationResult.Invalid -> {
+                            playerViewModel.sendToast(
+                                com.theveloper.pixelplay.utils.LyricsImportSecurity.messageFor(validation.reason)
+                            )
+                            return@let
                         }
                     }
+
+                    val currentSongId = currentSong?.id?.toLongOrNull()
+                    if (currentSongId == null) {
+                        playerViewModel.sendToast("No song selected for lyrics import.")
+                        return@let
+                    }
+
+                    playerViewModel.importLyricsFromFile(currentSongId, validatedImport)
                     showFetchLyricsDialog = false
                     showLyricsSheet = true
                 } catch (e: Exception) {
@@ -343,7 +354,7 @@ fun FullPlayerContent(
                     playerViewModel.resetLyricsSearchState()
                 },
                 onImport = {
-                    filePickerLauncher.launch(arrayOf("*/*"))
+                    filePickerLauncher.launch(com.theveloper.pixelplay.utils.LyricsImportSecurity.pickerMimeTypes())
                 }
             )
         }
@@ -920,7 +931,7 @@ fun FullPlayerContent(
             onSearchLyrics = { forcePick -> playerViewModel.fetchLyricsForCurrentSong(forcePick) },
             onPickResult = { playerViewModel.acceptLyricsSearchResultForCurrentSong(it) },
             onManualSearch = { title, artist -> playerViewModel.searchLyricsManually(title, artist) },
-            onImportLyrics = { filePickerLauncher.launch(arrayOf("*/*")) },
+            onImportLyrics = { filePickerLauncher.launch(com.theveloper.pixelplay.utils.LyricsImportSecurity.pickerMimeTypes()) },
             onDismissLyricsSearch = { playerViewModel.resetLyricsSearchState() },
             lyricsSyncOffset = lyricsSyncOffset,
             onLyricsSyncOffsetChange = { currentSong?.id?.let { songId -> playerViewModel.setLyricsSyncOffset(songId, it) } },

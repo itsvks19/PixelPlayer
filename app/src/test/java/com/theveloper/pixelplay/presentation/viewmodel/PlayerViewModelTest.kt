@@ -21,6 +21,7 @@ import androidx.media3.common.MediaItem
 import kotlinx.collections.immutable.ImmutableList
 import kotlinx.collections.immutable.persistentListOf
 import kotlinx.collections.immutable.toImmutableList
+import dagger.Lazy
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -70,6 +71,7 @@ class PlayerViewModelTest {
     private val mockDualPlayerEngine: DualPlayerEngine = mockk(relaxed = true)
     private val mockAppShortcutManager: AppShortcutManager = mockk(relaxed = true)
     private val mockTelegramCacheManager: TelegramCacheManager = mockk(relaxed = true)
+    private val mockTelegramCacheManagerProvider: Lazy<TelegramCacheManager> = mockk()
     private val mockTelegramRepository: com.theveloper.pixelplay.data.telegram.TelegramRepository = mockk(relaxed = true)
     private val mockListeningStatsTracker: ListeningStatsTracker = mockk(relaxed = true)
     private val mockDailyMixStateHolder: DailyMixStateHolder = mockk(relaxed = true)
@@ -115,6 +117,7 @@ class PlayerViewModelTest {
         val directExecutor = java.util.concurrent.Executor { it.run() }
         every { ContextCompat.getMainExecutor(any()) } returns directExecutor
         every { mockTelegramCacheManager.embeddedArtUpdated } returns kotlinx.coroutines.flow.MutableSharedFlow()
+        every { mockTelegramCacheManagerProvider.get() } returns mockTelegramCacheManager
 
         // Mock UserPreferences
         coEvery { mockUserPreferencesRepository.favoriteSongIdsFlow } returns flowOf(emptySet())
@@ -219,7 +222,7 @@ class PlayerViewModelTest {
             mockSyncManager,
             mockDualPlayerEngine,
             mockAppShortcutManager,
-            mockTelegramCacheManager,
+            mockTelegramCacheManagerProvider,
             mockListeningStatsTracker,
             mockDailyMixStateHolder,
             mockLyricsStateHolder,
