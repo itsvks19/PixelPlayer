@@ -2865,26 +2865,7 @@ class PlayerViewModel @Inject constructor(
                 foundStartIndex = true
             }
 
-            val metadataBuilder = MediaMetadata.Builder()
-                .setTitle(song.title)
-                .setArtist(song.displayArtist)
-
-            playlistId?.let {
-                val extras = Bundle()
-                extras.putString("playlistId", it)
-                metadataBuilder.setExtras(extras)
-            }
-
-            song.albumArtUriString?.toUri()?.let { uri ->
-                metadataBuilder.setArtworkUri(uri)
-            }
-
-            mediaItems += MediaItem.Builder()
-                .setMediaId(song.id)
-                .setUri(MediaItemBuilder.playbackUri(song))
-                .setMimeType(song.mimeType)
-                .setMediaMetadata(metadataBuilder.build())
-                .build()
+            mediaItems += buildPlaybackMediaItem(song, playlistId)
         }
 
         PreparedPlaybackQueue(
@@ -3120,16 +3101,7 @@ class PlayerViewModel @Inject constructor(
 
     fun addSongToQueue(song: Song) {
         mediaController?.let { controller ->
-            val mediaItem = MediaItem.Builder()
-                .setMediaId(song.id)
-                .setUri(MediaItemBuilder.playbackUri(song))
-                .setMimeType(song.mimeType)
-                .setMediaMetadata(MediaMetadata.Builder()
-                    .setTitle(song.title)
-                    .setArtist(song.displayArtist)
-                    .setArtworkUri(song.albumArtUriString?.toUri())
-                    .build())
-                .build()
+            val mediaItem = buildPlaybackMediaItem(song)
             controller.addMediaItem(mediaItem)
             // Queue UI is synced via onTimelineChanged listener
         }
@@ -3137,18 +3109,7 @@ class PlayerViewModel @Inject constructor(
 
     fun addSongNextToQueue(song: Song) {
         mediaController?.let { controller ->
-            val mediaItem = MediaItem.Builder()
-                .setMediaId(song.id)
-                .setUri(MediaItemBuilder.playbackUri(song))
-                .setMimeType(song.mimeType)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(song.title)
-                        .setArtist(song.displayArtist)
-                        .setArtworkUri(song.albumArtUriString?.toUri())
-                        .build()
-                )
-                .build()
+            val mediaItem = buildPlaybackMediaItem(song)
 
             val insertionIndex = if (controller.currentMediaItemIndex != C.INDEX_UNSET) {
                 (controller.currentMediaItemIndex + 1).coerceAtMost(controller.mediaItemCount)
@@ -3159,6 +3120,25 @@ class PlayerViewModel @Inject constructor(
             controller.addMediaItem(insertionIndex, mediaItem)
             // Queue UI is synced via onTimelineChanged listener
         }
+    }
+
+    private fun buildPlaybackMediaItem(song: Song, playlistId: String? = null): MediaItem {
+        val baseItem = MediaItemBuilder.build(song)
+        if (playlistId == null) {
+            return baseItem
+        }
+
+        val mergedExtras = Bundle(baseItem.mediaMetadata.extras ?: Bundle()).apply {
+            putString("playlistId", playlistId)
+        }
+
+        return baseItem.buildUpon()
+            .setMediaMetadata(
+                baseItem.mediaMetadata.buildUpon()
+                    .setExtras(mergedExtras)
+                    .build()
+            )
+            .build()
     }
 
     // =====================================================

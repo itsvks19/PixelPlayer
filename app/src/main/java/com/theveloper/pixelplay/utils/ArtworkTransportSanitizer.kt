@@ -153,6 +153,7 @@ object ArtworkTransportSanitizer {
 
     private fun encodeBitmap(bitmap: Bitmap, config: Config): ByteArray? {
         var quality = config.initialJpegQuality
+        var lastValidBytes: ByteArray? = null
         while (quality >= config.minJpegQuality) {
             val output = ByteArrayOutputStream()
             val encoded = runCatching {
@@ -160,12 +161,16 @@ object ArtworkTransportSanitizer {
             }.getOrDefault(false)
             if (encoded) {
                 val bytes = output.toByteArray()
-                if (bytes.isNotEmpty() && bytes.size <= config.maxBytes) {
-                    return bytes
+                if (bytes.isNotEmpty()) {
+                    lastValidBytes = bytes
+                    if (bytes.size <= config.maxBytes) {
+                        return bytes
+                    }
                 }
             }
             quality -= config.jpegQualityStep
         }
-        return null
+        // Return the smallest encoding even if over maxBytes — better than no art
+        return lastValidBytes
     }
 }

@@ -1426,8 +1426,7 @@ class MusicService : MediaLibraryService() {
                         title = metadata.title?.toString(),
                         artist = metadata.artist?.toString(),
                         albumTitle = metadata.albumTitle?.toString(),
-                        artworkUri = metadata.artworkUri?.toString()
-                            ?: metadata.extras?.getString(MediaItemBuilder.EXTERNAL_EXTRA_ALBUM_ART),
+                        artworkUri = resolveStoredArtworkUriString(metadata),
                         durationMs = durationMs,
                     )
                 )
@@ -1714,6 +1713,8 @@ class MusicService : MediaLibraryService() {
         if (old.artistName != new.artistName) return true
         if (old.isPlaying != new.isPlaying) return true
         if (old.albumArtUri != new.albumArtUri) return true
+        // Detect when artwork bytes arrive (null → non-null) or are cleared
+        if ((old.albumArtBitmapData == null) != (new.albumArtBitmapData == null)) return true
         if (old.isFavorite != new.isFavorite) return true
         if (old.queue != new.queue) return true
         if (old.themeColors != new.themeColors) return true
@@ -1721,7 +1722,7 @@ class MusicService : MediaLibraryService() {
         if (old.repeatMode != new.repeatMode) return true
         if (old.totalDurationMs != new.totalDurationMs) return true
         if (old.wearThemePalette != new.wearThemePalette) return true
-        
+
         val drift = kotlin.math.abs(old.currentPositionMs - new.currentPositionMs)
         return drift > 3000L
     }
@@ -1835,7 +1836,7 @@ class MusicService : MediaLibraryService() {
         var title = currentItem?.mediaMetadata?.title?.toString().orEmpty()
         var artist = currentItem?.mediaMetadata?.artist?.toString().orEmpty()
         var mediaId = currentItem?.mediaId
-        var artworkUri = resolveArtworkUri(currentItem?.mediaMetadata)
+        var artworkUri = resolveWidgetArtworkUriCandidates(currentItem?.mediaMetadata).firstOrNull()
         var artworkData = currentItem?.mediaMetadata?.artworkData
 
         resolveCastRemoteSnapshot()?.let { remote ->
@@ -1861,7 +1862,15 @@ class MusicService : MediaLibraryService() {
             shuffleEnabled = remote.isShuffleEnabled
         }
 
-        val (artBytes, artUriString) = getAlbumArtForWidget(artworkData, artworkUri)
+        val artworkCandidates = resolveWidgetArtworkUriCandidates(
+            metadata = currentItem?.mediaMetadata,
+            preferredArtworkUri = artworkUri,
+        )
+        val (artBytes, artUriString) = getAlbumArtForWidget(
+            mediaId = mediaId,
+            embeddedArt = artworkData,
+            artUris = artworkCandidates,
+        )
 
         // Merge two IO preference reads into a single context switch
         val (playerTheme, paletteStyle) = withContext(Dispatchers.IO) {
@@ -1942,10 +1951,19 @@ class MusicService : MediaLibraryService() {
                 val mediaItem = window.mediaItem
                 val songId = mediaItem.mediaId.toLongOrNull()
                 if (songId != null) {
+                    val initialQueueArtworkUri = resolveWidgetArtworkUriCandidates(mediaItem.mediaMetadata)
+                        .firstOrNull()
+                    val queueArtworkUri = when {
+                        initialQueueArtworkUri == null -> resolveRepositoryArtworkUri(mediaItem.mediaId)
+                        initialQueueArtworkUri.scheme?.lowercase() == "content" &&
+                            initialQueueArtworkUri.authority == "$packageName.provider" ->
+                            resolveRepositoryArtworkUri(mediaItem.mediaId) ?: initialQueueArtworkUri
+                        else -> initialQueueArtworkUri
+                    }
                     queueItems.add(
                         com.theveloper.pixelplay.data.model.QueueItem(
                             id = songId,
-                            albumArtUri = resolveArtworkUri(mediaItem.mediaMetadata)?.toString()
+                            albumArtUri = queueArtworkUri?.toString()
                         )
                     )
                 }
@@ -1974,51 +1992,146 @@ class MusicService : MediaLibraryService() {
     private var cachedSchemeArtUri: String? = null
     private var cachedSchemePaletteStyle: AlbumArtPaletteStyle? = null
     private var cachedColorSchemePair: ColorSchemePair? = null
-    private var cachedWidgetArtUri: String? = null
+    private var cachedWidgetArtSourceKey: String? = null
+    private var cachedWidgetArtResolvedUri: String? = null
     private var cachedWidgetArtBytes: ByteArray? = null
-    private var cachedWidgetArtLoadFailureUri: String? = null
+    private var cachedWidgetArtLoadFailureKey: String? = null
     private var cachedWidgetArtLoadFailureAtMs: Long = 0L
 
-    private suspend fun getAlbumArtForWidget(embeddedArt: ByteArray?, artUri: Uri?): Pair<ByteArray?, String?> = withContext(Dispatchers.IO) {
-        val artUriString = artUri?.toString()
-        embeddedArt?.takeIf { it.isNotEmpty() }?.let { bytes ->
-            val sanitizedBytes = ArtworkTransportSanitizer.sanitizeEncodedBytes(
-                data = bytes,
-                config = ArtworkTransportSanitizer.WIDGET_CONFIG,
-            )
-            cachedWidgetArtUri = artUriString
-            cachedWidgetArtBytes = sanitizedBytes
-            cachedWidgetArtLoadFailureUri = null
+    private suspend fun getAlbumArtForWidget(
+        mediaId: String?,
+        embeddedArt: ByteArray?,
+        artUris: List<Uri>,
+    ): Pair<ByteArray?, String?> = withContext(Dispatchers.IO) {
+        // Try embedded art first — but fall through to URI loading if sanitization fails
+        val sanitizedFromEmbedded = embeddedArt?.takeIf { it.isNotEmpty() }?.let { bytes ->
+            runCatching {
+                ArtworkTransportSanitizer.sanitizeEncodedBytes(
+                    data = bytes,
+                    config = ArtworkTransportSanitizer.WIDGET_CONFIG,
+                )
+            }.getOrNull()
+        }
+        val candidateUriStrings = LinkedHashSet<String>().apply {
+            artUris.forEach { candidate ->
+                candidate.toString()
+                    .takeIf { it.isNotBlank() }
+                    ?.let(::add)
+            }
+        }.toList()
+        val preferredUriString = candidateUriStrings.firstOrNull()
+        val sourceKey = buildWidgetArtworkSourceKey(
+            mediaId = mediaId,
+            candidateUriStrings = candidateUriStrings,
+        )
+
+        if (sanitizedFromEmbedded != null) {
+            cachedWidgetArtSourceKey = sourceKey
+            cachedWidgetArtResolvedUri = preferredUriString
+            cachedWidgetArtBytes = sanitizedFromEmbedded
+            cachedWidgetArtLoadFailureKey = null
             cachedWidgetArtLoadFailureAtMs = 0L
-            return@withContext sanitizedBytes to artUriString
+            return@withContext sanitizedFromEmbedded to preferredUriString
         }
 
-        if (artUriString.isNullOrBlank()) {
-            return@withContext null to artUriString
+        if (sourceKey != null && sourceKey == cachedWidgetArtSourceKey && cachedWidgetArtBytes != null) {
+            return@withContext cachedWidgetArtBytes to (cachedWidgetArtResolvedUri ?: preferredUriString)
         }
-
-        if (artUriString == cachedWidgetArtUri && cachedWidgetArtBytes != null) {
-            return@withContext cachedWidgetArtBytes to artUriString
-        }
-        if (artUriString == cachedWidgetArtLoadFailureUri) {
+        if (sourceKey != null && sourceKey == cachedWidgetArtLoadFailureKey) {
             val failureAgeMs = SystemClock.elapsedRealtime() - cachedWidgetArtLoadFailureAtMs
             if (failureAgeMs < WIDGET_ART_FAILURE_RETRY_MS) {
-                return@withContext null to artUriString
+                return@withContext null to preferredUriString
             }
         }
 
-        val loadedBytes = loadArtworkBytesForWidget(artUri)
-        if (loadedBytes != null) {
-            cachedWidgetArtUri = artUriString
-            cachedWidgetArtBytes = loadedBytes
-            cachedWidgetArtLoadFailureUri = null
-            cachedWidgetArtLoadFailureAtMs = 0L
-            return@withContext loadedBytes to artUriString
+        val repositoryArtUriString = if (mediaId.isNullOrBlank()) {
+            null
+        } else {
+            resolveRepositoryArtworkUri(mediaId)?.toString()
+        }
+        val resolvedUriStrings = LinkedHashSet<String>().apply {
+            addAll(candidateUriStrings)
+            repositoryArtUriString
+                ?.takeIf { it.isNotBlank() }
+                ?.let(::add)
         }
 
-        cachedWidgetArtLoadFailureUri = artUriString
+        for (candidateUriString in resolvedUriStrings) {
+            val candidateUri = parseArtworkUriString(candidateUriString) ?: continue
+            val loadedBytes = loadArtworkBytesForWidget(candidateUri)
+            if (loadedBytes != null) {
+                cachedWidgetArtSourceKey = sourceKey
+                cachedWidgetArtResolvedUri = candidateUriString
+                cachedWidgetArtBytes = loadedBytes
+                cachedWidgetArtLoadFailureKey = null
+                cachedWidgetArtLoadFailureAtMs = 0L
+                return@withContext loadedBytes to candidateUriString
+            }
+        }
+
+        cachedWidgetArtLoadFailureKey = sourceKey
         cachedWidgetArtLoadFailureAtMs = SystemClock.elapsedRealtime()
-        return@withContext null to artUriString
+        return@withContext null to (repositoryArtUriString ?: preferredUriString)
+    }
+
+    private fun resolveStoredArtworkUriString(metadata: MediaMetadata?): String? {
+        metadata ?: return null
+        return metadata.extras
+            ?.getString(MediaItemBuilder.EXTERNAL_EXTRA_ALBUM_ART)
+            ?.takeIf { it.isNotBlank() }
+            ?: metadata.artworkUri
+                ?.toString()
+                ?.takeIf { it.isNotBlank() }
+    }
+
+    private fun resolveWidgetArtworkUriCandidates(
+        metadata: MediaMetadata?,
+        preferredArtworkUri: Uri? = null,
+    ): List<Uri> {
+        val candidates = LinkedHashSet<String>()
+        preferredArtworkUri
+            ?.toString()
+            ?.takeIf { it.isNotBlank() }
+            ?.let(candidates::add)
+        resolveStoredArtworkUriString(metadata)?.let(candidates::add)
+        metadata?.artworkUri
+            ?.toString()
+            ?.takeIf { it.isNotBlank() }
+            ?.let(candidates::add)
+        return candidates.mapNotNull(::parseArtworkUriString)
+    }
+
+    private fun parseArtworkUriString(rawArtworkUri: String?): Uri? {
+        if (rawArtworkUri.isNullOrBlank()) {
+            return null
+        }
+
+        return MediaItemBuilder.artworkUri(rawArtworkUri)
+            ?: if (rawArtworkUri.startsWith("/")) {
+                Uri.fromFile(java.io.File(rawArtworkUri))
+            } else {
+                runCatching { Uri.parse(rawArtworkUri) }.getOrNull()
+            }
+    }
+
+    private fun buildWidgetArtworkSourceKey(
+        mediaId: String?,
+        candidateUriStrings: List<String>,
+    ): String? {
+        val normalizedMediaId = mediaId?.takeIf { it.isNotBlank() }
+        if (normalizedMediaId == null && candidateUriStrings.isEmpty()) {
+            return null
+        }
+        return buildString {
+            normalizedMediaId?.let {
+                append("mediaId=")
+                append(it)
+            }
+            if (candidateUriStrings.isNotEmpty()) {
+                if (isNotEmpty()) append('|')
+                append(candidateUriStrings.joinToString(separator = ","))
+            }
+        }
     }
 
     private fun resolveArtworkUri(metadata: MediaMetadata?): Uri? {
@@ -2028,27 +2141,49 @@ class MusicService : MediaLibraryService() {
             ?.getString(MediaItemBuilder.EXTERNAL_EXTRA_ALBUM_ART)
             ?.takeIf { it.isNotBlank() }
             ?: return null
-        return runCatching { extrasUri.toUri() }.getOrNull()
+        return parseArtworkUriString(extrasUri)
+    }
+
+    private suspend fun resolveRepositoryArtworkUri(mediaId: String?): Uri? {
+        val songId = mediaId?.takeIf { it.isNotBlank() } ?: return null
+        val song = withContext(Dispatchers.IO) {
+            musicRepository.getSong(songId).first()
+        } ?: return null
+
+        return MediaItemBuilder.artworkUri(song.albumArtUriString)
+            ?: song.albumArtUriString
+                ?.takeIf { it.isNotBlank() }
+                ?.let { raw ->
+                    if (raw.startsWith("/")) Uri.fromFile(java.io.File(raw))
+                    else runCatching { Uri.parse(raw) }.getOrNull()
+                }
     }
 
     private fun loadArtworkBytesForWidget(uri: Uri): ByteArray? {
+        val uriString = uri.toString()
         val scheme = uri.scheme?.lowercase()
-        return when (scheme) {
-            "content", "file", "android.resource", com.theveloper.pixelplay.utils.LocalArtworkUri.SCHEME -> {
+        val isLocalArtworkUri = com.theveloper.pixelplay.utils.LocalArtworkUri.isLocalArtworkUri(uriString)
+        return when {
+            isLocalArtworkUri || scheme == "content" || scheme == "file" || scheme == "android.resource" -> {
                 runCatching {
-                    ArtworkTransportSanitizer.sanitizeStream(
-                        openStream = { AlbumArtUtils.openArtworkInputStream(applicationContext, uri) },
-                        config = ArtworkTransportSanitizer.WIDGET_CONFIG,
-                    )
+                    AlbumArtUtils.openArtworkInputStream(applicationContext, uri)?.use { input ->
+                        readBytesCapped(input, ArtworkTransportSanitizer.WIDGET_CONFIG.sourceBytesLimit)
+                            ?.let { bytes ->
+                                ArtworkTransportSanitizer.sanitizeEncodedBytes(
+                                    data = bytes,
+                                    config = ArtworkTransportSanitizer.WIDGET_CONFIG,
+                                )
+                            }
+                    }
                 }.getOrElse { error ->
                     Timber.tag(TAG).w(error, "Widget artwork read failed for local uri=%s", uri)
                     null
                 }
             }
-            "http", "https" -> {
+            scheme == "http" || scheme == "https" -> {
                 var connection: HttpURLConnection? = null
                 try {
-                    connection = (URL(uri.toString()).openConnection() as? HttpURLConnection)
+                    connection = (URL(uriString).openConnection() as? HttpURLConnection)
                         ?: return null
                     connection.connectTimeout = 4_000
                     connection.readTimeout = 6_000

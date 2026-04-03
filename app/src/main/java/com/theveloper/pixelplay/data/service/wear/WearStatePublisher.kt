@@ -129,14 +129,22 @@ class WearStatePublisher @Inject constructor(
         if (!uriString.isNullOrBlank()) {
             val uri = Uri.parse(uriString)
             val scheme = uri.scheme?.lowercase()
-            when (scheme) {
-                "content", "file", "android.resource", com.theveloper.pixelplay.utils.LocalArtworkUri.SCHEME -> {
-                    ArtworkTransportSanitizer.sanitizeStream(
-                        openStream = { AlbumArtUtils.openArtworkInputStream(application, uri) },
-                        config = ArtworkTransportSanitizer.WEAR_CONFIG,
-                    )?.let { return it }
+            when {
+                com.theveloper.pixelplay.utils.LocalArtworkUri.isLocalArtworkUri(uriString) ||
+                    scheme == "content" ||
+                    scheme == "file" ||
+                    scheme == "android.resource" -> {
+                    AlbumArtUtils.openArtworkInputStream(application, uri)?.use { input ->
+                        readBytesCapped(input, ArtworkTransportSanitizer.WEAR_CONFIG.sourceBytesLimit)
+                            ?.let { bytes ->
+                                ArtworkTransportSanitizer.sanitizeEncodedBytes(
+                                    data = bytes,
+                                    config = ArtworkTransportSanitizer.WEAR_CONFIG,
+                                )
+                            }
+                    }?.let { return it }
                 }
-                "http", "https" -> {
+                scheme == "http" || scheme == "https" -> {
                     downloadAndSanitizeRemoteArtwork(uriString)?.let { return it }
                 }
             }

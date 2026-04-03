@@ -35,7 +35,15 @@ object MediaItemBuilder {
         "3gpp",
         "alac",
     )
-    private val SUPPORTED_ARTWORK_SCHEMES = setOf(
+    private val SUPPORTED_INTERNAL_ARTWORK_SCHEMES = setOf(
+        LocalArtworkUri.SCHEME,
+        "content",
+        "file",
+        "android.resource",
+        "http",
+        "https",
+    )
+    private val SUPPORTED_EXTERNAL_ARTWORK_SCHEMES = setOf(
         "content",
         "file",
         "android.resource",
@@ -150,25 +158,17 @@ object MediaItemBuilder {
      * Keep only schemes that these surfaces can usually resolve, and normalize raw paths.
      */
     fun artworkUri(rawArtworkUri: String?): Uri? {
-        if (rawArtworkUri.isNullOrBlank()) {
-            return null
-        }
-
-        if (rawArtworkUri.startsWith("/")) {
-            return Uri.fromFile(File(rawArtworkUri))
-        }
-
-        val uri = rawArtworkUri.toUri()
-        val scheme = uri.scheme?.lowercase()
-        return if (scheme != null && scheme in SUPPORTED_ARTWORK_SCHEMES) {
-            uri
-        } else {
-            null
-        }
+        return normalizeArtworkUri(rawArtworkUri, SUPPORTED_INTERNAL_ARTWORK_SCHEMES)
     }
 
     fun externalControllerArtworkUri(context: Context, rawArtworkUri: String?): Uri? {
-        val normalizedUri = artworkUri(rawArtworkUri) ?: return null
+        if (LocalArtworkUri.isLocalArtworkUri(rawArtworkUri)) {
+            val songId = rawArtworkUri?.let(LocalArtworkUri::parseSongId) ?: return null
+            return AlbumArtUtils.getCachedAlbumArtUri(context.applicationContext, songId)
+        }
+
+        val normalizedUri = normalizeArtworkUri(rawArtworkUri, SUPPORTED_EXTERNAL_ARTWORK_SCHEMES)
+            ?: return null
         return when (normalizedUri.scheme?.lowercase()) {
             "file" -> normalizedUri.path
                 ?.takeIf { it.isNotBlank() }
@@ -213,6 +213,35 @@ object MediaItemBuilder {
 
         metadataBuilder.setExtras(extras)
         return metadataBuilder.build()
+    }
+
+    private fun normalizeArtworkUri(
+        rawArtworkUri: String?,
+        supportedSchemes: Set<String>
+    ): Uri? {
+        if (rawArtworkUri.isNullOrBlank()) {
+            return null
+        }
+
+        if (LocalArtworkUri.isLocalArtworkUri(rawArtworkUri)) {
+            return if (LocalArtworkUri.SCHEME in supportedSchemes) {
+                Uri.parse(rawArtworkUri)
+            } else {
+                null
+            }
+        }
+
+        if (rawArtworkUri.startsWith("/")) {
+            return Uri.fromFile(File(rawArtworkUri))
+        }
+
+        val uri = rawArtworkUri.toUri()
+        val scheme = uri.scheme?.lowercase()
+        return if (scheme != null && scheme in supportedSchemes) {
+            uri
+        } else {
+            null
+        }
     }
 
     private fun providerBackedArtworkUri(context: Context, file: File): Uri? {
