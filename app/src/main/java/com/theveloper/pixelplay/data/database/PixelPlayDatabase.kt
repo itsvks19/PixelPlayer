@@ -32,10 +32,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
         NavidromePlaylistEntity::class,
         TelegramTopicEntity::class,
         JellyfinSongEntity::class,
-        JellyfinPlaylistEntity::class
+        JellyfinPlaylistEntity::class,
+        AiCacheEntity::class
     ],
-         version = 37, // Add Jellyfin tables
-
+    version = 37,
     exportSchema = true
 )
 abstract class PixelPlayDatabase : RoomDatabase() {
@@ -53,6 +53,7 @@ abstract class PixelPlayDatabase : RoomDatabase() {
     abstract fun qqmusicDao(): QqMusicDao
     abstract fun navidromeDao(): NavidromeDao
     abstract fun jellyfinDao(): JellyfinDao
+    abstract fun aiCacheDao(): AiCacheDao
 
     companion object {
         // Gap-bridging no-op migrations for missing version ranges.
@@ -533,6 +534,18 @@ abstract class PixelPlayDatabase : RoomDatabase() {
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_playlist_songs_playlist_id_sort_order ON playlist_songs(playlist_id, sort_order)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS index_playlist_songs_song_id ON playlist_songs(song_id)")
                 installFavoriteSyncTriggers(db)
+            }
+        }
+        
+        val MIGRATION_36_37 = object : Migration(36, 37) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS ai_cache (
+                        promptHash TEXT NOT NULL PRIMARY KEY,
+                        responseJson TEXT NOT NULL,
+                        timestamp INTEGER NOT NULL
+                    )
+                """.trimIndent())
             }
         }
 

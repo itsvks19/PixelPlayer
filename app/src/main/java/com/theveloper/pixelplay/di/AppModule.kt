@@ -21,6 +21,7 @@ import com.theveloper.pixelplay.data.database.EngagementDao
 import com.theveloper.pixelplay.data.database.FavoritesDao
 import com.theveloper.pixelplay.data.database.GDriveDao
 import com.theveloper.pixelplay.data.database.LyricsDao
+import com.theveloper.pixelplay.data.database.AiCacheDao
 import com.theveloper.pixelplay.data.database.LocalPlaylistDao
 import com.theveloper.pixelplay.data.database.MusicDao
 import com.theveloper.pixelplay.data.database.PixelPlayDatabase
@@ -221,6 +222,12 @@ object AppModule {
     @Provides
     fun provideNavidromeDao(database: PixelPlayDatabase): com.theveloper.pixelplay.data.database.NavidromeDao {
         return database.navidromeDao()
+    }
+    
+    @Singleton
+    @Provides
+    fun provideAiCacheDao(database: PixelPlayDatabase): AiCacheDao {
+        return database.aiCacheDao()
     }
 
     @Singleton

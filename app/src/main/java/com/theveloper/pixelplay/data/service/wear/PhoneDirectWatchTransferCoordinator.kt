@@ -15,6 +15,7 @@ import com.theveloper.pixelplay.data.model.Song
 import com.theveloper.pixelplay.data.navidrome.NavidromeStreamProxy
 import com.theveloper.pixelplay.data.netease.NeteaseStreamProxy
 import com.theveloper.pixelplay.data.preferences.AlbumArtPaletteStyle
+import com.theveloper.pixelplay.data.preferences.AlbumArtColorAccuracy
 import com.theveloper.pixelplay.data.preferences.ThemePreferencesRepository
 import com.theveloper.pixelplay.data.preferences.ThemePreference
 import com.theveloper.pixelplay.data.qqmusic.QqMusicStreamProxy
@@ -545,7 +546,14 @@ class PhoneDirectWatchTransferCoordinator @Inject constructor(
             val paletteStyle = AlbumArtPaletteStyle.fromStorageKey(
                 themePreferencesRepository.albumArtPaletteStyleFlow.first().storageKey
             )
-            val schemePair = colorSchemeProcessor.getOrGenerateColorScheme(artUriString, paletteStyle)
+            val colorAccuracyLevel = AlbumArtColorAccuracy.clamp(
+                themePreferencesRepository.albumArtColorAccuracyFlow.first()
+            )
+            val schemePair = colorSchemeProcessor.getOrGenerateColorScheme(
+                albumArtUri = artUriString,
+                paletteStyle = paletteStyle,
+                colorAccuracyLevel = colorAccuracyLevel
+            )
             if (schemePair != null) {
                 return buildWearThemePalette(schemePair.dark)
             }
