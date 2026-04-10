@@ -873,13 +873,17 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch {
             aiPreferencesRepository.setAiProvider(provider)
 
-            // Update UI immediately
+            // Clear existing models immediately to show loading state
             _uiState.update {
                 it.copy(
                     availableModels = emptyList(),
-                    modelsFetchError = null
+                    modelsFetchError = null,
+                    isLoadingModels = false
                 )
             }
+
+            // Small delay to let the provider preference propagate to StateFlows
+            delay(100)
 
             // Fetch models for the newly selected provider if we have an API key
             val apiKey = when (provider) {
@@ -894,6 +898,34 @@ class SettingsViewModel @Inject constructor(
                 else -> ""
             }
 
+            if (apiKey.isNotBlank()) {
+                fetchAvailableModels(apiKey, provider)
+            }
+        }
+    }
+
+    /**
+     * Called by the UI on initial load to ensure models are loaded for the current provider.
+     * Prevents the "disappearing models" bug where switching away and back clears the list.
+     */
+    fun loadModelsForCurrentProvider() {
+        viewModelScope.launch {
+            if (_uiState.value.isLoadingModels) return@launch
+            if (_uiState.value.availableModels.isNotEmpty()) return@launch
+            
+            val provider = aiProvider.value
+            val apiKey = when (provider) {
+                "GEMINI" -> geminiApiKey.value
+                "DEEPSEEK" -> deepseekApiKey.value
+                "GROQ" -> groqApiKey.value
+                "MISTRAL" -> mistralApiKey.value
+                "NVIDIA" -> nvidiaApiKey.value
+                "KIMI" -> kimiApiKey.value
+                "GLM" -> glmApiKey.value
+                "OPENAI" -> openaiApiKey.value
+                else -> ""
+            }
+            
             if (apiKey.isNotBlank()) {
                 fetchAvailableModels(apiKey, provider)
             }

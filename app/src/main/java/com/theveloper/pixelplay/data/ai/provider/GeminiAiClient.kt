@@ -11,7 +11,8 @@ import kotlinx.coroutines.withContext
 class GeminiAiClient(private val apiKey: String) : AiClient {
     
     companion object {
-        private const val DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+        // Updated: gemini-2.0-flash is the stable default as Google phases out 2.5 preview APIs
+        private const val DEFAULT_GEMINI_MODEL = "gemini-2.0-flash"
     }
     
     private fun createModel(modelName: String, systemPrompt: String, temp: Float = 0.7f): GenerativeModel {
@@ -44,7 +45,7 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
                 response.text ?: throw AiProviderSupport.createException(
                     providerName = "Gemini",
                     statusCode = null,
-                    transportMessage = "Gemini returned an empty response",
+                    transportMessage = "Gemini returned an empty response. The model may have filtered the content.",
                     responseBody = null,
                     requestedModel = resolvedModel
                 )
@@ -95,9 +96,9 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
     override suspend fun validateApiKey(apiKey: String): Boolean {
         return withContext(Dispatchers.IO) {
             try {
-                // Try a very small generation to validate key
+                // Use the stable model for validation
                 val generativeModel = GenerativeModel(
-                    modelName = "gemini-1.5-flash",
+                    modelName = DEFAULT_GEMINI_MODEL,
                     apiKey = apiKey
                 )
                 val response = generativeModel.generateContent("test")
@@ -133,7 +134,10 @@ class GeminiAiClient(private val apiKey: String) : AiClient {
     }
     
     private fun getDefaultModels(): List<String> {
+        // Updated fallback list: prioritize stable models, include 2.0 series
         return listOf(
+            "gemini-2.0-flash",
+            "gemini-2.0-flash-lite",
             "gemini-2.5-flash",
             "gemini-2.5-pro",
             "gemini-1.5-flash",

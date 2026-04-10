@@ -301,24 +301,12 @@ fun SettingsCategoryScreen(
         }
     }
 
-    // Fetch models on page load when API key exists and models are not already loaded
-    LaunchedEffect(category, aiProvider, geminiApiKey, deepseekApiKey, groqApiKey, mistralApiKey) {
-        if (category == SettingsCategory.AI_INTEGRATION && !uiState.isLoadingModels) {
-            val apiKey = when (aiProvider) {
-                "DEEPSEEK" -> deepseekApiKey
-                "GROQ" -> groqApiKey
-                "MISTRAL" -> mistralApiKey
-                "NVIDIA" -> nvidiaApiKey
-                "KIMI" -> kimiApiKey
-                "GLM" -> glmApiKey
-                "OPENAI" -> openaiApiKey
-                else -> geminiApiKey
-            }
-            
-            if (apiKey.isNotBlank() && uiState.availableModels.isEmpty()) {
-                // Wait for ViewModel instance initialization delay if needed
-                // It will be triggered by API Key UI changes automatically anyway
-            }
+    // Auto-load models when entering the AI settings page or when provider/key changes
+    LaunchedEffect(category, aiProvider) {
+        if (category == SettingsCategory.AI_INTEGRATION) {
+            // Small delay to let StateFlows settle after navigation
+            kotlinx.coroutines.delay(200)
+            settingsViewModel.loadModelsForCurrentProvider()
         }
     }
 
@@ -877,6 +865,25 @@ fun SettingsCategoryScreen(
                                     onSelectionChanged = { settingsViewModel.onAiProviderChange(it) },
                                     leadingIcon = { Icon(Icons.Rounded.Science, null, tint = MaterialTheme.colorScheme.secondary) }
                                 )
+                                SwitchSettingItem(
+                                    title = "Safe Token Mode",
+                                    subtitle = if (uiState.isSafeTokenLimitEnabled) {
+                                        "ON — Fast & cheap. Sends minimal data (~1K tokens) to AI."
+                                    } else {
+                                        "OFF — Deep context. Sends full listening profile (~8K tokens) for richer results."
+                                    },
+                                    checked = uiState.isSafeTokenLimitEnabled,
+                                    onCheckedChange = { settingsViewModel.setSafeTokenLimitEnabled(it) },
+                                    leadingIcon = {
+                                        Icon(
+                                            painterResource(R.drawable.rounded_monitoring_24),
+                                            null,
+                                            tint = if (uiState.isSafeTokenLimitEnabled) MaterialTheme.colorScheme.primary
+                                                   else MaterialTheme.colorScheme.tertiary,
+                                            modifier = Modifier.size(24.dp)
+                                        )
+                                    }
+                                )
                             }
                             
                             // API Key Section
@@ -1119,38 +1126,6 @@ fun SettingsCategoryScreen(
                                             subtitle = "Customize how the AI behaves."
                                         )
                                     }
-                                }
-                            }
-
-                            // AI Performance & Context Section (Premium M3E Styling)
-                            Spacer(modifier = Modifier.height(16.dp))
-                            Text(
-                                text = "Context & Performance",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 8.dp)
-                            )
-
-                            Surface(
-                                color = MaterialTheme.colorScheme.surfaceContainerLow,
-                                shape = RoundedCornerShape(24.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(vertical = 4.dp)) {
-                                    SwitchSettingItem(
-                                        title = "Safe Token Limit",
-                                        subtitle = "When enabled, strictly limits data sent to AI to stay under 5,000 tokens. Disable for maximum personalization and better discovery results (higher latency).",
-                                        checked = uiState.isSafeTokenLimitEnabled,
-                                        onCheckedChange = { settingsViewModel.setSafeTokenLimitEnabled(it) },
-                                        leadingIcon = { 
-                                            Icon(
-                                                Icons.Rounded.Science, 
-                                                null, 
-                                                tint = MaterialTheme.colorScheme.secondary,
-                                                modifier = Modifier.size(24.dp)
-                                            ) 
-                                        }
-                                    )
                                 }
                             }
                         }
